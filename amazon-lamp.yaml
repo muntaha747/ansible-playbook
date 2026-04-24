@@ -1,5 +1,5 @@
 ---
-- name: Install LAMP Stack (Universal - Amazon Linux)
+- name: Install LAMP Stack on Amazon Linux 2023
   hosts: webservers
   become: true
 
@@ -19,21 +19,12 @@
         name: httpd
         state: present
 
-    # 🔥 FIX: Install correct MariaDB version automatically
-    - name: Install MariaDB (try AL2 package)
-      ansible.builtin.dnf:
-        name: mariadb-server
-        state: present
-      ignore_errors: true
-      register: mariadb_al2
-
-    - name: Install MariaDB (fallback for AL2023)
+    - name: Install MariaDB (AL2023)
       ansible.builtin.dnf:
         name: mariadb105-server
         state: present
-      when: mariadb_al2.failed
 
-    - name: Install PHP + dependencies
+    - name: Install PHP and dependencies
       ansible.builtin.dnf:
         name:
           - php
@@ -43,7 +34,7 @@
           - php-cli
         state: present
 
-    # 🔥 REQUIRED for MySQL Ansible module
+    # ✅ FIX: Required for Ansible MySQL module
     - name: Install PyMySQL
       ansible.builtin.dnf:
         name: python3-PyMySQL
@@ -55,6 +46,7 @@
         state: started
         enabled: true
 
+    # ✅ Now this works (Python fixed)
     - name: Set MariaDB root password
       community.mysql.mysql_user:
         name: root
