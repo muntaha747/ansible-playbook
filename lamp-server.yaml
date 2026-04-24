@@ -30,28 +30,37 @@
           - php-mysqlnd
           - php-fpm
           - php-json
+          - php-cli
         state: present
 
-    # 🔥 FIXED: Removed EPEL (not supported) and installed phpMyAdmin manually
+    # 🔥 FIXED: Manual phpMyAdmin install (no EPEL, works everywhere)
 
     - name: Download phpMyAdmin
       ansible.builtin.get_url:
         url: https://www.phpmyadmin.net/downloads/phpMyAdmin-latest-all-languages.tar.gz
         dest: /tmp/phpmyadmin.tar.gz
 
-    - name: Extract phpMyAdmin
+    - name: Create phpMyAdmin directory
+      ansible.builtin.file:
+        path: /usr/share/phpMyAdmin
+        state: directory
+        mode: '0755'
+
+    - name: Extract phpMyAdmin directly
       ansible.builtin.unarchive:
         src: /tmp/phpmyadmin.tar.gz
-        dest: /usr/share/
+        dest: /usr/share/phpMyAdmin
         remote_src: yes
+        extra_opts: [--strip-components=1]
 
-    - name: Rename phpMyAdmin folder
-      ansible.builtin.shell: |
-        mv /usr/share/phpMyAdmin-* /usr/share/phpMyAdmin
-      args:
-        creates: /usr/share/phpMyAdmin
+    - name: Set correct permissions for phpMyAdmin
+      ansible.builtin.file:
+        path: /usr/share/phpMyAdmin
+        state: directory
+        recurse: yes
+        mode: '0755'
 
-    - name: Configure phpMyAdmin access
+    - name: Configure phpMyAdmin in Apache
       ansible.builtin.copy:
         dest: /etc/httpd/conf.d/phpMyAdmin.conf
         content: |
@@ -61,12 +70,6 @@
               AddDefaultCharset UTF-8
               Require all granted
           </Directory>
-
-    - name: Start and enable Apache
-      ansible.builtin.service:
-        name: httpd
-        state: started
-        enabled: true
 
     - name: Start and enable MariaDB
       ansible.builtin.service:
@@ -90,7 +93,21 @@
           phpinfo();
           ?>
 
-    - name: Restart Apache
+    # 🔥 IMPORTANT: Validate Apache before starting
+
+    - name: Check Apache configuration
+      ansible.builtin.command: apachectl configtest
+      register: apache_test
+      ignore_errors: true
+
+    - name: Fail if Apache config is invalid
+      ansible.builtin.fail:
+        msg: "Apache configuration failed. Fix config before proceeding."
+      when: apache_test.rc != 0
+
+    - name: Start and enable Apache
       ansible.builtin.service:
         name: httpd
-        state: restarted
+        state: started
+        enabled: true
+        
