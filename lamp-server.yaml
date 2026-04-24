@@ -46,7 +46,8 @@
         remote_src: yes
 
     - name: Rename phpMyAdmin folder
-      ansible.builtin.command: mv /usr/share/phpMyAdmin-* /usr/share/phpMyAdmin
+      ansible.builtin.shell: |
+        mv /usr/share/phpMyAdmin-* /usr/share/phpMyAdmin
       args:
         creates: /usr/share/phpMyAdmin
 
