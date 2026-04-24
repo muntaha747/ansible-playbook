@@ -1,0 +1,80 @@
+---
+- name: Install LAMP Stack on Amazon Linux 2
+  hosts: webservers
+  become: true
+
+  vars:
+    ansible_python_interpreter: /usr/bin/python3
+    db_root_password: StrongPassword123
+
+  tasks:
+
+    - name: Update all packages
+      ansible.builtin.yum:
+        name: "*"
+        state: latest
+
+    - name: Install Apache (httpd)
+      ansible.builtin.yum:
+        name: httpd
+        state: present
+
+    - name: Install MariaDB server
+      ansible.builtin.yum:
+        name: mariadb-server
+        state: present
+
+    - name: Install PHP and required modules
+      ansible.builtin.yum:
+        name:
+          - php
+          - php-mysqlnd
+          - php-fpm
+          - php-json
+        state: present
+
+    # 🔥 REQUIRED for Ansible MySQL modules
+    - name: Install PyMySQL
+      ansible.builtin.yum:
+        name: python3-PyMySQL
+        state: present
+
+    - name: Start and enable MariaDB
+      ansible.builtin.service:
+        name: mariadb
+        state: started
+        enabled: true
+
+    # 🔥 Set root password (works now)
+    - name: Set MariaDB root password
+      community.mysql.mysql_user:
+        name: root
+        host: localhost
+        password: "{{ db_root_password }}"
+        login_unix_socket: /var/lib/mysql/mysql.sock
+      ignore_errors: true
+
+    - name: Create test PHP page
+      ansible.builtin.copy:
+        dest: /var/www/html/index.php
+        content: |
+          <?php
+          phpinfo();
+          ?>
+
+    # 🔥 Validate Apache config before starting
+    - name: Check Apache configuration
+      ansible.builtin.command: apachectl configtest
+      register: apache_test
+      ignore_errors: true
+
+    - name: Fail if Apache config is invalid
+      ansible.builtin.fail:
+        msg: "Apache configuration failed"
+      when: apache_test.rc != 0
+
+    - name: Start and enable Apache
+      ansible.builtin.service:
+        name: httpd
+        state: started
+        enabled: true
