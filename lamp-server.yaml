@@ -32,15 +32,34 @@
           - php-json
         state: present
 
-    - name: Install EPEL repository (required for phpMyAdmin)
-      ansible.builtin.dnf:
-        name: epel-release
-        state: present
+    # 🔥 FIXED: Removed EPEL (not supported) and installed phpMyAdmin manually
 
-    - name: Install phpMyAdmin
-      ansible.builtin.dnf:
-        name: phpMyAdmin
-        state: present
+    - name: Download phpMyAdmin
+      ansible.builtin.get_url:
+        url: https://www.phpmyadmin.net/downloads/phpMyAdmin-latest-all-languages.tar.gz
+        dest: /tmp/phpmyadmin.tar.gz
+
+    - name: Extract phpMyAdmin
+      ansible.builtin.unarchive:
+        src: /tmp/phpmyadmin.tar.gz
+        dest: /usr/share/
+        remote_src: yes
+
+    - name: Rename phpMyAdmin folder
+      ansible.builtin.command: mv /usr/share/phpMyAdmin-* /usr/share/phpMyAdmin
+      args:
+        creates: /usr/share/phpMyAdmin
+
+    - name: Configure phpMyAdmin access
+      ansible.builtin.copy:
+        dest: /etc/httpd/conf.d/phpMyAdmin.conf
+        content: |
+          Alias /phpMyAdmin /usr/share/phpMyAdmin
+
+          <Directory /usr/share/phpMyAdmin/>
+              AddDefaultCharset UTF-8
+              Require all granted
+          </Directory>
 
     - name: Start and enable Apache
       ansible.builtin.service:
@@ -54,24 +73,13 @@
         state: started
         enabled: true
 
-    - name: Secure MariaDB - set root password
-      ansible.builtin.mysql_user:
+    - name: Set MariaDB root password
+      community.mysql.mysql_user:
         name: root
         host: localhost
         password: "{{ db_root_password }}"
         login_unix_socket: /var/lib/mysql/mysql.sock
       ignore_errors: true
-
-    - name: Configure phpMyAdmin access
-      ansible.builtin.copy:
-        dest: /etc/httpd/conf.d/phpMyAdmin.conf
-        content: |
-          Alias /phpMyAdmin /usr/share/phpMyAdmin
-
-          <Directory /usr/share/phpMyAdmin/>
-              AddDefaultCharset UTF-8
-              Require all granted
-          </Directory>
 
     - name: Create test PHP page
       ansible.builtin.copy:
